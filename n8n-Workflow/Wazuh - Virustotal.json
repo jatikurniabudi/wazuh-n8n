@@ -1,0 +1,205 @@
+{
+  "name": "Wazuh - Virustotal",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wazuh-fim",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -144,
+        -144
+      ],
+      "id": "f3e720b2-a2ce-4fcb-a169-0ae0844b4a91",
+      "name": "Webhook",
+      "webhookId": "74567c56-6f83-4ea7-bf5d-723806ac53bf"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = items[0].json.body || {};\nconst syscheck = body.syscheck || {};\nconst rule = body.rule || {};\n\nconst md5 = syscheck.md5_after || null;\nconst sha1 = syscheck.sha1_after || null;\nconst sha256 = syscheck.sha256_after || null;\nconst filePath = syscheck.path || null;\n\nconst description = rule.description || 'No description';\nconst agent = body.agent?.name || 'unknown';\nconst level = rule.level || 'unknown';\n\nreturn [{\n  json: {\n    type: 'file_alert',\n    md5,\n    sha1,\n    sha256,\n    file_path: filePath,\n    description,\n    agent,\n    level,\n    full_alert: body\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        96,
+        -144
+      ],
+      "id": "118a3fd4-96fc-483a-83d5-eee8407e1e12",
+      "name": "Extract IOCs"
+    },
+    {
+      "parameters": {
+        "preBuiltAgentsCalloutHttpRequest": "",
+        "httpVariantWarning": "",
+        "curlImport": "",
+        "method": "GET",
+        "": "",
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $json.sha256 }} ",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": false,
+        "options": {},
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        352,
+        -144
+      ],
+      "id": "566172c5-121b-488e-847c-e52523382247",
+      "name": "sha256 check",
+      "extendsCredential": "virusTotalApi",
+      "credentials": {
+        "virusTotalApi": {
+          "id": "dpeAKPVdqEakM93J",
+          "name": "VirusTotal account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = items[0].json.data?.attributes;\n\nconst summary = {\n  SHA256: items[0].json.data?.id || 'N/A',\n  Malicious: data?.last_analysis_stats?.malicious || 0,\n  Suspicious: data?.last_analysis_stats?.suspicious || 0,\n  Undetected: data?.last_analysis_stats?.undetected || 0,\n  Harmless: data?.last_analysis_stats?.harmless || 0,\n  Tags: (data?.tags || []).join(', '),\n  Tags_HTML: (data?.tags || []).map(tag =>\n    `<span class=\"tag\">${tag.trim()}</span>`\n  ).join(''),\n  Magic: data?.magic || 'N/A',\n  Name: data?.meaningful_name || 'Unknown',\n  Description: data?.popular_threat_classification?.suggested_threat_label || 'No Label',\n  Reputation: data?.reputation || 0,\n  Generated_At: new Date().toLocaleString('en-IN', {\n    timeZone: 'Asia/Kolkata',\n    dateStyle: 'short',\n    timeStyle: 'medium'\n  })\n};\n\n// Determine Status\nconst status = (summary.Malicious > 0 || summary.Suspicious > 0) ? 'Suspicious' : 'Safe';\nsummary.Status = status;\n\nreturn [\n  {\n    json: {\n      summary\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        -144
+      ],
+      "id": "36e28d3c-a7f2-4c43-ba16-be65b8cf2051",
+      "name": "Summary"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "51f386e3-959d-4ffb-980a-a249c6944442",
+              "leftValue": "={{ $json.summary.Status }}",
+              "rightValue": "Suspicious",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        848,
+        -144
+      ],
+      "id": "b0ad784e-a023-4a89-9d7f-1f7be15e9daa",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "chatId": "-4216466664",
+        "text": "= {{ $('Extract IOCs').item.json.full_alert.rule.description }} on {{ $('Extract IOCs').item.json.agent }} - {{ $('Extract IOCs').item.json.full_alert.agent.ip }}\n\nThis file detected by Virustotal as {{ $('Summary').item.json.summary.Status }} with detail\n  - Hash: {{ $('Summary').item.json.summary.SHA256 }}\n  - Description: {{ $('Summary').item.json.summary.Magic }}\n  - Location: {{ $('Extract IOCs').item.json.full_alert.syscheck.path }}\nScore Malicious \"{{ $('Summary').item.json.summary.Malicious }}\"",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1056,
+        -272
+      ],
+      "id": "0ffbb7a2-58b7-47bb-b5ec-f4ef2d2d466b",
+      "name": "Send a text message",
+      "webhookId": "c431a88e-1d02-4ea5-8e9d-6fab4ab94dfa",
+      "credentials": {
+        "telegramApi": {
+          "id": "domV0qi4YAcX767U",
+          "name": "AINO Security Monitoring"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract IOCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract IOCs": {
+      "main": [
+        [
+          {
+            "node": "sha256 check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sha256 check": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "63e879bd-a162-49ec-80c9-38994e300cff",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cc8da0df93c27cf38245abe4cb9c5a0dbb0d3348abe8106d1ab5c6dccfbd9bb2"
+  },
+  "id": "qrRaywmgADPb9ODQ",
+  "tags": []
+}

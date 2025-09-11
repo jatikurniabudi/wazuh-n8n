@@ -1,0 +1,575 @@
+{
+  "name": "Wazuh - Virustotal copy",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "rnd",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -144,
+        -144
+      ],
+      "id": "f9dce120-7b96-46bb-9eff-8ab482ac9ef6",
+      "name": "Webhook",
+      "webhookId": "ebd104c7-41cb-4087-80fa-f43af5200b0c"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = items[0].json.body || {};\nconst syscheck = body.syscheck || {};\nconst rule = body.rule || {};\n\nconst md5 = syscheck.md5_after || null;\nconst sha1 = syscheck.sha1_after || null;\nconst sha256 = syscheck.sha256_after || null;\nconst filePath = syscheck.path || null;\n\nconst description = rule.description || 'No description';\nconst agent = body.agent?.name || 'unknown';\nconst level = rule.level || 'unknown';\n\nreturn [{\n  json: {\n    type: 'file_alert',\n    md5,\n    sha1,\n    sha256,\n    file_path: filePath,\n    description,\n    agent,\n    level,\n    full_alert: body\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        16,
+        -80
+      ],
+      "id": "f0b643a7-5171-4bb1-8be4-1eabb376ad86",
+      "name": "Extract IOCs"
+    },
+    {
+      "parameters": {
+        "preBuiltAgentsCalloutHttpRequest": "",
+        "httpVariantWarning": "",
+        "curlImport": "",
+        "method": "GET",
+        "": "",
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $json.sha256 }} ",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": false,
+        "options": {},
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        -80
+      ],
+      "id": "c4f7061e-7abb-4ccb-9865-183e49d6f753",
+      "name": "sha256 check",
+      "extendsCredential": "virusTotalApi",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "virusTotalApi": {
+          "id": "dpeAKPVdqEakM93J",
+          "name": "VirusTotal account 2"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = items[0].json.data?.attributes;\n\nconst summary = {\n  SHA256: items[0].json.data?.id || 'N/A',\n  Malicious: data?.last_analysis_stats?.malicious || 0,\n  Suspicious: data?.last_analysis_stats?.suspicious || 0,\n  Undetected: data?.last_analysis_stats?.undetected || 0,\n  Harmless: data?.last_analysis_stats?.harmless || 0,\n  Tags: (data?.tags || []).join(', '),\n  Tags_HTML: (data?.tags || []).map(tag =>\n    `<span class=\"tag\">${tag.trim()}</span>`\n  ).join(''),\n  Magic: data?.magic || 'N/A',\n  Name: data?.meaningful_name || 'Unknown',\n  Description: data?.popular_threat_classification?.suggested_threat_label || 'No Label',\n  Reputation: data?.reputation || 0,\n  Generated_At: new Date().toLocaleString('en-IN', {\n    timeZone: 'Asia/Kolkata',\n    dateStyle: 'short',\n    timeStyle: 'medium'\n  })\n};\n\n// Determine Status\nconst status = (summary.Malicious > 0 || summary.Suspicious > 0) ? 'Suspicious' : 'Safe';\nsummary.Status = status;\n\nreturn [\n  {\n    json: {\n      summary\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        -144
+      ],
+      "id": "e04a76a7-9d32-4541-b260-b9b2cf2a9878",
+      "name": "Summary"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "51f386e3-959d-4ffb-980a-a249c6944442",
+              "leftValue": "={{ $json.summary.Status }}",
+              "rightValue": "Suspicious",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        656,
+        -144
+      ],
+      "id": "82642b83-f459-4780-a6f6-3f75df8351a0",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "chatId": "-4216466664",
+        "text": "= {{ $('Extract IOCs').item.json.full_alert.rule.description }} on {{ $('Extract IOCs').item.json.agent }} - {{ $('Extract IOCs').item.json.full_alert.agent.ip }}\n\nThis file detected by Virustotal as {{ $('Summary').item.json.summary.Status }} with detail\n  - Hash: {{ $('Summary').item.json.summary.SHA256 }}\n  - Description: {{ $('Summary').item.json.summary.Magic }}\n  - Location: {{ $('Extract IOCs').item.json.full_alert.syscheck.path }}\nScore Malicious \"{{ $('Summary').item.json.summary.Malicious }}\"",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        864,
+        -256
+      ],
+      "id": "561e836f-2f4f-4d13-bd43-fe9701c1ac2c",
+      "name": "Send a text message",
+      "webhookId": "462e52b0-1278-4241-b5e1-aaa2c992f6f6",
+      "credentials": {
+        "telegramApi": {
+          "id": "domV0qi4YAcX767U",
+          "name": "AINO Security Monitoring"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 15
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        128,
+        -272
+      ],
+      "id": "a3bd286f-a005-49b1-bc6a-46b792d56496",
+      "name": "Wait",
+      "webhookId": "49b4b032-be35-47fd-beab-fa6a1e741709"
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/11Wsy-d4GmwEw7G11cqFtN_jCp3iPC0vzRnPtmnmbsEA/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Malware - VirusTotal",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/11Wsy-d4GmwEw7G11cqFtN_jCp3iPC0vzRnPtmnmbsEA/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ \n  new Date($('Webhook').item.json.body.timestamp)\n    .toISOString()\n    .split('T')[0] \n}}\n",
+            "Hash": "={{ $json.sha256 }}",
+            "Agent": "={{ $json.agent }}",
+            "Result": "Not Found in Database Virustotal",
+            "File Path": "={{ $('Webhook').item.json.body.syscheck.path }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Agent",
+              "displayName": "Agent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "File Path",
+              "displayName": "File Path",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hash",
+              "displayName": "Hash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Result",
+              "displayName": "Result",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        400,
+        16
+      ],
+      "id": "9e6c1706-5d4f-4ceb-a901-392641a469ee",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleApi": {
+          "id": "1763BNfh7Hz9z173",
+          "name": "kurniabudi.backup"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/11Wsy-d4GmwEw7G11cqFtN_jCp3iPC0vzRnPtmnmbsEA/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Malware - VirusTotal",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/11Wsy-d4GmwEw7G11cqFtN_jCp3iPC0vzRnPtmnmbsEA/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ \n  new Date($('Webhook').item.json.body.timestamp)\n    .toISOString()\n    .split('T')[0] \n}}\n",
+            "Hash": "={{ $json.sha256 }}",
+            "Agent": "={{ $json.agent }}",
+            "Result": "No positive found",
+            "File Path": "={{ $('Webhook').item.json.body.syscheck.path }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Agent",
+              "displayName": "Agent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "File Path",
+              "displayName": "File Path",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hash",
+              "displayName": "Hash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Result",
+              "displayName": "Result",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        864,
+        -80
+      ],
+      "id": "b72108bd-a55a-4c9c-8906-3691880faec4",
+      "name": "Append row in sheet1",
+      "credentials": {
+        "googleApi": {
+          "id": "1763BNfh7Hz9z173",
+          "name": "kurniabudi.backup"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/11Wsy-d4GmwEw7G11cqFtN_jCp3iPC0vzRnPtmnmbsEA/edit?gid=0#gid=0",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Malware - VirusTotal",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/11Wsy-d4GmwEw7G11cqFtN_jCp3iPC0vzRnPtmnmbsEA/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Date": "={{ \n  new Date($('Webhook').item.json.body.timestamp)\n    .toISOString()\n    .split('T')[0] \n}}\n",
+            "Hash": "={{ $('Extract IOCs').item.json.sha256 }}",
+            "Agent": "={{ $('Extract IOCs').item.json.agent }}",
+            "Result": "={{ $('Summary').item.json.summary.Status }}",
+            "Notes": "={{ $json.result.text }}",
+            "File Path": "={{ $('Webhook').item.json.body.syscheck.path }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Agent",
+              "displayName": "Agent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "File Path",
+              "displayName": "File Path",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Hash",
+              "displayName": "Hash",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Result",
+              "displayName": "Result",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Notes",
+              "displayName": "Notes",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1104,
+        -256
+      ],
+      "id": "f5961545-78d7-45f2-a747-b1a76bb641a2",
+      "name": "Append row in sheet2",
+      "credentials": {
+        "googleApi": {
+          "id": "1763BNfh7Hz9z173",
+          "name": "kurniabudi.backup"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract IOCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract IOCs": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sha256 check": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "sha256 check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Append row in sheet2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "3d322185-0ba2-451e-b44d-d982679b1b22",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cc8da0df93c27cf38245abe4cb9c5a0dbb0d3348abe8106d1ab5c6dccfbd9bb2"
+  },
+  "id": "pTPKGUf509HN4WMD",
+  "tags": [
+    {
+      "createdAt": "2025-09-04T02:52:31.738Z",
+      "updatedAt": "2025-09-04T02:52:31.738Z",
+      "id": "MWG9vvSOgrv9SdaF",
+      "name": "rnd"
+    }
+  ]
+}

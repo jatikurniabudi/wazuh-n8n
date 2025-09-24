@@ -1,0 +1,612 @@
+{
+  "name": "Wazuh - Virustotal",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wazuh-fim",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -128,
+        -352
+      ],
+      "id": "faa382e9-db37-4652-b1f3-16787c5dd05f",
+      "name": "Webhook",
+      "webhookId": "502fe8fd-8a02-42df-9341-1aeb4bf53837"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = items[0].json.body || {};\nconst syscheck = body.syscheck || {};\nconst rule = body.rule || {};\n\nconst md5 = syscheck.md5_after || null;\nconst sha1 = syscheck.sha1_after || null;\nconst sha256 = syscheck.sha256_after || null;\nconst filePath = syscheck.path || null;\n\nconst description = rule.description || 'No description';\nconst agent = body.agent?.name || 'unknown';\nconst level = rule.level || 'unknown';\n\nreturn [{\n  json: {\n    type: 'file_alert',\n    md5,\n    sha1,\n    sha256,\n    file_path: filePath,\n    description,\n    agent,\n    level,\n    full_alert: body\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        128,
+        -208
+      ],
+      "id": "4f9c4af8-f5f8-4f8f-beb1-213d30378c62",
+      "name": "Extract IOCs"
+    },
+    {
+      "parameters": {
+        "preBuiltAgentsCalloutHttpRequest": "",
+        "httpVariantWarning": "",
+        "curlImport": "",
+        "method": "GET",
+        "": "",
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $json.sha256 }} ",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": false,
+        "options": {},
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        -352
+      ],
+      "id": "db5a0476-b2f0-4869-bb55-b474eac3aab9",
+      "name": "sha256 check",
+      "extendsCredential": "virusTotalApi",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "credentials": {
+        "virusTotalApi": {
+          "id": "dpeAKPVdqEakM93J",
+          "name": "VirusTotal account 2"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = items[0].json.data?.attributes;\n\nconst summary = {\n  SHA256: items[0].json.data?.id || 'N/A',\n  Malicious: data?.last_analysis_stats?.malicious || 0,\n  Suspicious: data?.last_analysis_stats?.suspicious || 0,\n  Undetected: data?.last_analysis_stats?.undetected || 0,\n  Harmless: data?.last_analysis_stats?.harmless || 0,\n  Tags: (data?.tags || []).join(', '),\n  Tags_HTML: (data?.tags || []).map(tag =>\n    `<span class=\"tag\">${tag.trim()}</span>`\n  ).join(''),\n  Magic: data?.magic || 'N/A',\n  Name: data?.meaningful_name || 'Unknown',\n  Description: data?.popular_threat_classification?.suggested_threat_label || 'No Label',\n  Reputation: data?.reputation || 0,\n  Generated_At: new Date().toLocaleString('en-IN', {\n    timeZone: 'Asia/Kolkata',\n    dateStyle: 'short',\n    timeStyle: 'medium'\n  })\n};\n\n// Determine Status\nconst status = (summary.Malicious > 0 || summary.Suspicious > 0) ? 'Suspicious' : 'Safe';\nsummary.Status = status;\n\nreturn [\n  {\n    json: {\n      summary\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        -576
+      ],
+      "id": "4a4a0972-50e6-47d8-9798-ff345a44afcd",
+      "name": "Summary"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "51f386e3-959d-4ffb-980a-a249c6944442",
+              "leftValue": "={{ $json.summary.Status }}",
+              "rightValue": "Suspicious",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        992,
+        -384
+      ],
+      "id": "b0ff712c-6c89-4992-804e-af27d80b553c",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "chatId": "-4216466664",
+        "text": "= {{ $('Extract IOCs').item.json.full_alert.rule.description }} on {{ $('Extract IOCs').item.json.agent }} - {{ $('Extract IOCs').item.json.full_alert.agent.ip }}\n\nThis file detected by Virustotal as {{ $('Summary').item.json.summary.Status }} with detail\n  - Hash: {{ $('Summary').item.json.summary.SHA256 }}\n  - Description: {{ $('Summary').item.json.summary.Magic }}\n  - Location: {{ $('Extract IOCs').item.json.full_alert.syscheck.path }}\nScore Malicious \"{{ $('Summary').item.json.summary.Malicious }}\"",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1120,
+        -576
+      ],
+      "id": "d6feec0a-8942-4179-bf22-59ff5c84ec08",
+      "name": "Send a text message",
+      "webhookId": "5c48f777-54bc-4982-bad3-0a2b1e391a63",
+      "credentials": {
+        "telegramApi": {
+          "id": "domV0qi4YAcX767U",
+          "name": "AINO Security Monitoring"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 15
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        304,
+        -320
+      ],
+      "id": "936e7333-9435-423d-94a1-9bbd64312f88",
+      "name": "Wait",
+      "webhookId": "b09a1368-4cb8-448d-b301-73bc50c043e0"
+    },
+    {
+      "parameters": {
+        "preBuiltAgentsCalloutHttpRequest": "",
+        "httpVariantWarning": "",
+        "curlImport": "",
+        "method": "GET",
+        "": "",
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $json.sha256 }} ",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": false,
+        "options": {},
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -352
+      ],
+      "id": "8d888d02-7b82-40c1-9298-19a738a67805",
+      "name": "VirusTotal HTTP Request",
+      "retryOnFail": true,
+      "maxTries": 2,
+      "extendsCredential": "virusTotalApi",
+      "credentials": {
+        "virusTotalApi": {
+          "id": "rMc68tLEo0uUju0b",
+          "name": "VirusTotal account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dceb2d4c-1540-4da0-813f-619c3a16a572",
+              "leftValue": "={{ $json.error.message }}",
+              "rightValue": "The service is receiving too many requests from you",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        592,
+        -144
+      ],
+      "id": "f9ed4101-73b0-4f40-859f-d94ea332c83b",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "binaryPropertyName": "=data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        1632,
+        -528
+      ],
+      "id": "a44e3633-42ca-4222-83a3-f0c2c9b1086d",
+      "name": "Convert to File"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ef8921f8-d33c-4b6d-b87d-d8f58f6c60c7",
+              "name": "date",
+              "value": "={{    new Date($('Webhook').item.json.body.timestamp)     .toISOString()     .split('T')[0]  }}",
+              "type": "string"
+            },
+            {
+              "id": "88a4f0bf-5799-4e34-b073-6ec9e54cc9cb",
+              "name": "=agent",
+              "value": "={{ $('Webhook').item.json.body.agent.name }}",
+              "type": "string"
+            },
+            {
+              "id": "59ef86c1-3e5d-4bf7-8031-d863277ab88d",
+              "name": "location",
+              "value": "={{ $('Webhook').item.json.body.syscheck.path }}",
+              "type": "string"
+            },
+            {
+              "id": "35fb150e-2cb1-44af-a6e2-1f7791b83722",
+              "name": "hash",
+              "value": "={{ $('Webhook').item.json.body.syscheck.sha256_after }}",
+              "type": "string"
+            },
+            {
+              "id": "cb3ae169-8fce-4ff6-801f-26fb97acd1a7",
+              "name": "result",
+              "value": "={{ $('Summary').item.json.summary.Status }}",
+              "type": "string"
+            },
+            {
+              "id": "b1666ceb-3028-4ef7-9d1c-a44a6a93ff6c",
+              "name": "note",
+              "value": "={{ $('Summary').item.json.summary.Magic }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1264,
+        -352
+      ],
+      "id": "4d62d48e-3190-43b5-bb49-65a0ffe99a12",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "/data/files/malware-virustotal.xlsx",
+        "dataPropertyName": "=data",
+        "options": {
+          "append": false
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1968,
+        -528
+      ],
+      "id": "fdd664d2-5168-40e8-af3e-f1cf48e9e855",
+      "name": "Write"
+    },
+    {
+      "parameters": {
+        "fileSelector": "/data/files/malware-virustotal.xlsx",
+        "options": {
+          "dataPropertyName": "data"
+        }
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        624,
+        -768
+      ],
+      "id": "72074b88-efae-4dae-bc51-14a68fcbe903",
+      "name": "Read/Write Files from Disk",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "operation": "xlsx",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        976,
+        -864
+      ],
+      "id": "4bdf6746-a4ce-4a02-bb91-036cd5b03e16",
+      "name": "Extract from File",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1488,
+        -800
+      ],
+      "id": "3c58f060-7ba6-4f5e-8531-e23d08e80739",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ef8921f8-d33c-4b6d-b87d-d8f58f6c60c7",
+              "name": "date",
+              "value": "={{    new Date($('Webhook').item.json.body.timestamp)     .toISOString()     .split('T')[0]  }}",
+              "type": "string"
+            },
+            {
+              "id": "88a4f0bf-5799-4e34-b073-6ec9e54cc9cb",
+              "name": "=agent",
+              "value": "={{ $('Webhook').item.json.body.agent.name }}",
+              "type": "string"
+            },
+            {
+              "id": "59ef86c1-3e5d-4bf7-8031-d863277ab88d",
+              "name": "location",
+              "value": "={{ $('Webhook').item.json.body.syscheck.path }}",
+              "type": "string"
+            },
+            {
+              "id": "35fb150e-2cb1-44af-a6e2-1f7791b83722",
+              "name": "hash",
+              "value": "={{ $('Webhook').item.json.body.syscheck.sha256_after }}",
+              "type": "string"
+            },
+            {
+              "id": "cb3ae169-8fce-4ff6-801f-26fb97acd1a7",
+              "name": "result",
+              "value": "Not Found in Database Virustotal",
+              "type": "string"
+            },
+            {
+              "id": "b1666ceb-3028-4ef7-9d1c-a44a6a93ff6c",
+              "name": "note",
+              "value": "-",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1264,
+        -160
+      ],
+      "id": "78740bec-c781-4eb5-8b6a-ed864fc31768",
+      "name": "Edit Fields1"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract IOCs",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract IOCs": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "sha256 check": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "sha256 check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Write",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Jakarta",
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "versionId": "b0e0b6ae-22f3-4aea-b2f4-17ff91aef101",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "cc8da0df93c27cf38245abe4cb9c5a0dbb0d3348abe8106d1ab5c6dccfbd9bb2"
+  },
+  "id": "t7f0afIYFOQOgc5o",
+  "tags": []
+}

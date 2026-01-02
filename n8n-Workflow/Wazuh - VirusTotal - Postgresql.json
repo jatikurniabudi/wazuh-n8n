@@ -1,0 +1,1526 @@
+{
+  "name": "Wazuh - VirusTotal - Postgresql",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT *\nFROM malware_virustotal_prod\nLIMIT 10;\n",
+        "options": {
+          "replaceEmptyStrings": false
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        192,
+        -464
+      ],
+      "id": "e3cb075a-5dc8-4078-a43a-1f86f9033d59",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "t5TqpQLDRgLiK8Es",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "select",
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "virustotal_hash",
+          "mode": "list",
+          "cachedResultName": "virustotal_hash"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        480,
+        -448
+      ],
+      "id": "31d1e079-b560-4e93-9f9d-e620f5a00838",
+      "name": "Select rows from a table",
+      "credentials": {
+        "postgres": {
+          "id": "t5TqpQLDRgLiK8Es",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wazuh-fim2",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -688,
+        -16
+      ],
+      "id": "cd3e93ad-195e-4fda-8cd1-de0284ebc0aa",
+      "name": "Webhook",
+      "webhookId": "dff81e5f-7569-4fbd-baed-89607a0fc254"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = items[0].json.body || {};\nconst syscheck = body.syscheck || {};\nconst rule = body.rule || {};\n\nconst md5 = syscheck.md5_after || null;\nconst sha1 = syscheck.sha1_after || null;\nconst sha256 = syscheck.sha256_after || null;\nconst filePath = syscheck.path || null;\n\nconst description = rule.description || 'No description';\nconst agent = body.agent?.name || 'unknown';\nconst level = rule.level || 'unknown';\n\nreturn [{\n  json: {\n    type: 'file_alert',\n    md5,\n    sha1,\n    sha256,\n    file_path: filePath,\n    description,\n    agent,\n    level,\n    full_alert: body\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -544,
+        -16
+      ],
+      "id": "e0540bb1-9318-40e6-9a2d-9bd07781cc1e",
+      "name": "Extract IOCs"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = items[0].json.data?.attributes;\n\nconst summary = {\n  SHA256: items[0].json.data?.id || 'N/A',\n  Malicious: data?.last_analysis_stats?.malicious || 0,\n  Suspicious: data?.last_analysis_stats?.suspicious || 0,\n  Undetected: data?.last_analysis_stats?.undetected || 0,\n  Harmless: data?.last_analysis_stats?.harmless || 0,\n  Tags: (data?.tags || []).join(', '),\n  Tags_HTML: (data?.tags || []).map(tag =>\n    `<span class=\"tag\">${tag.trim()}</span>`\n  ).join(''),\n  Magic: data?.magic || 'N/A',\n  Name: data?.meaningful_name || 'Unknown',\n  Description: data?.popular_threat_classification?.suggested_threat_label || 'No Label',\n  Reputation: data?.reputation || 0,\n  Generated_At: new Date().toLocaleString('en-IN', {\n    timeZone: 'Asia/Kolkata',\n    dateStyle: 'short',\n    timeStyle: 'medium'\n  })\n};\n\n// Determine Status\nconst status = (summary.Malicious > 0 || summary.Suspicious > 0) ? 'Suspicious' : 'Safe';\nsummary.Status = status;\n\nreturn [\n  {\n    json: {\n      summary\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        416
+      ],
+      "id": "171d587e-ade6-4d44-a9aa-2801700f25d7",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ef8921f8-d33c-4b6d-b87d-d8f58f6c60c7",
+              "name": "date",
+              "value": "={{    new Date($('Webhook').item.json.body.timestamp)     .toISOString()     .split('T')[0]  }}",
+              "type": "string"
+            },
+            {
+              "id": "88a4f0bf-5799-4e34-b073-6ec9e54cc9cb",
+              "name": "=agent",
+              "value": "={{ $('Webhook').item.json.body.agent.name }}",
+              "type": "string"
+            },
+            {
+              "id": "59ef86c1-3e5d-4bf7-8031-d863277ab88d",
+              "name": "location",
+              "value": "={{ $('Webhook').item.json.body.syscheck.path }}",
+              "type": "string"
+            },
+            {
+              "id": "35fb150e-2cb1-44af-a6e2-1f7791b83722",
+              "name": "hash",
+              "value": "={{ $('Webhook').item.json.body.syscheck.sha256_after }}",
+              "type": "string"
+            },
+            {
+              "id": "cb3ae169-8fce-4ff6-801f-26fb97acd1a7",
+              "name": "result",
+              "value": "Not Found in Database Virustotal",
+              "type": "string"
+            },
+            {
+              "id": "0c9a84e7-50c7-4137-9b4b-610259e0f7c1",
+              "name": "note",
+              "value": "-",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        752
+      ],
+      "id": "21b0c5e4-cdfd-4201-a5d0-f95ecc3b0be5",
+      "name": "Not found in VT"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "51f386e3-959d-4ffb-980a-a249c6944442",
+              "leftValue": "={{ $json.summary.Status }}",
+              "rightValue": "Suspicious",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        416
+      ],
+      "id": "22d28afe-d052-4394-9584-bc168be4ccfb",
+      "name": "Susspicious"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('Extract IOCs').item.json.agent }}",
+                    "rightValue": "prod-",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "e918e17f-7f2c-4250-8603-fa47007dcb15"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "prod"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "521591d3-3e12-4310-a916-7647e9fce33b",
+                    "leftValue": "={{ $('Extract IOCs').item.json.agent }}",
+                    "rightValue": "stg-",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "staging"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "3d3b9f8b-067f-48a7-9dc0-c0b4fc271379",
+                    "leftValue": "={{ $('Extract IOCs').item.json.agent }}",
+                    "rightValue": "dev-",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "dev"
+            }
+          ]
+        },
+        "options": {
+          "allMatchingOutputs": false
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1200,
+        400
+      ],
+      "id": "38c5fc80-f65c-484e-a548-9d9ff386f83f",
+      "name": "Switch1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ef8921f8-d33c-4b6d-b87d-d8f58f6c60c7",
+              "name": "date",
+              "value": "={{    new Date($('Webhook').item.json.body.timestamp)     .toISOString()     .split('T')[0]  }}",
+              "type": "string"
+            },
+            {
+              "id": "88a4f0bf-5799-4e34-b073-6ec9e54cc9cb",
+              "name": "=agent",
+              "value": "={{ $('Webhook').item.json.body.agent.name }}",
+              "type": "string"
+            },
+            {
+              "id": "59ef86c1-3e5d-4bf7-8031-d863277ab88d",
+              "name": "location",
+              "value": "={{ $('Webhook').item.json.body.syscheck.path }}",
+              "type": "string"
+            },
+            {
+              "id": "35fb150e-2cb1-44af-a6e2-1f7791b83722",
+              "name": "hash",
+              "value": "={{ $('Webhook').item.json.body.syscheck.sha256_after }}",
+              "type": "string"
+            },
+            {
+              "id": "cb3ae169-8fce-4ff6-801f-26fb97acd1a7",
+              "name": "result",
+              "value": "={{ $json.summary.Status }}",
+              "type": "string"
+            },
+            {
+              "id": "0c9a84e7-50c7-4137-9b4b-610259e0f7c1",
+              "name": "note",
+              "value": "={{ $json.summary.Magic }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1008,
+        416
+      ],
+      "id": "9011595e-36e4-44bc-a141-c7c4fc65de35",
+      "name": "Found"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "ef8921f8-d33c-4b6d-b87d-d8f58f6c60c7",
+              "name": "date",
+              "value": "={{    new Date($('Webhook').item.json.body.timestamp)     .toISOString()     .split('T')[0]  }}",
+              "type": "string"
+            },
+            {
+              "id": "88a4f0bf-5799-4e34-b073-6ec9e54cc9cb",
+              "name": "=agent",
+              "value": "={{ $('Webhook').item.json.body.agent.name }}",
+              "type": "string"
+            },
+            {
+              "id": "59ef86c1-3e5d-4bf7-8031-d863277ab88d",
+              "name": "location",
+              "value": "={{ $('Webhook').item.json.body.syscheck.path }}",
+              "type": "string"
+            },
+            {
+              "id": "35fb150e-2cb1-44af-a6e2-1f7791b83722",
+              "name": "hash",
+              "value": "={{ $('Webhook').item.json.body.syscheck.sha256_after }}",
+              "type": "string"
+            },
+            {
+              "id": "cb3ae169-8fce-4ff6-801f-26fb97acd1a7",
+              "name": "result",
+              "value": "={{ $json.status }}",
+              "type": "string"
+            },
+            {
+              "id": "0c9a84e7-50c7-4137-9b4b-610259e0f7c1",
+              "name": "note",
+              "value": "={{ $json.note }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        896,
+        -208
+      ],
+      "id": "62a3599d-1426-4c64-9bf6-44ca35f6f28a",
+      "name": "Found1"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  EXISTS (\n    SELECT 1\n    FROM virustotal_hash\n    WHERE hash = '{{$json.sha256}}'\n  ) AS found,\n  (\n    SELECT status\n    FROM virustotal_hash\n    WHERE hash = '{{$json.sha256}}'\n  ) AS status,\n  (\n    SELECT note\n    FROM virustotal_hash\n    WHERE hash = '{{$json.sha256}}'\n  ) AS note;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -400,
+        -16
+      ],
+      "id": "57d1392e-6451-4e79-94fc-4786c310277e",
+      "name": "Check Hash in List",
+      "alwaysOutputData": false,
+      "credentials": {
+        "postgres": {
+          "id": "t5TqpQLDRgLiK8Es",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "d48024c1-dddb-46a7-ac0c-0361917d0302",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "Suspicious",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -112,
+        -208
+      ],
+      "id": "edd986f7-7236-458d-9027-e14ad2b6bf67",
+      "name": "Suspicious?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f06a2bc8-daee-467f-af20-fc00a37d76fa",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -256,
+        -16
+      ],
+      "id": "904047c5-8d5f-48a0-8d26-a4a8d8d38be6",
+      "name": "Exist?"
+    },
+    {
+      "parameters": {
+        "preBuiltAgentsCalloutHttpRequest": "",
+        "httpVariantWarning": "",
+        "curlImport": "",
+        "method": "GET",
+        "": "",
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $('Extract IOCs').item.json.sha256 }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": false,
+        "options": {},
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        128
+      ],
+      "id": "3e582730-0e51-4d04-b815-cce8db41d738",
+      "name": "VirusTotal 1",
+      "alwaysOutputData": false,
+      "extendsCredential": "virusTotalApi",
+      "credentials": {
+        "virusTotalApi": {
+          "id": "moR34MdXahq8NUtg",
+          "name": "Account 1"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "preBuiltAgentsCalloutHttpRequest": "",
+        "httpVariantWarning": "",
+        "curlImport": "",
+        "method": "GET",
+        "": "",
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $('Extract IOCs').item.json.sha256 }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": false,
+        "options": {},
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        304
+      ],
+      "id": "e470a124-d2d7-4715-bc08-2e593be8c68b",
+      "name": "VirusTotal 2",
+      "extendsCredential": "virusTotalApi",
+      "credentials": {
+        "virusTotalApi": {
+          "id": "BdwCZGUqoSkQmIFa",
+          "name": "Account 2"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "preBuiltAgentsCalloutHttpRequest": "",
+        "httpVariantWarning": "",
+        "curlImport": "",
+        "method": "GET",
+        "": "",
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $('Extract IOCs').item.json.sha256 }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": false,
+        "options": {},
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        480
+      ],
+      "id": "29677241-8c33-4b3f-b596-9a854d7b9c20",
+      "name": "VirusTotal 3",
+      "extendsCredential": "virusTotalApi",
+      "credentials": {
+        "virusTotalApi": {
+          "id": "lxxbW9J4h0QlGBh1",
+          "name": "Account 3"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "preBuiltAgentsCalloutHttpRequest": "",
+        "httpVariantWarning": "",
+        "curlImport": "",
+        "method": "GET",
+        "": "",
+        "url": "=https://www.virustotal.com/api/v3/files/{{ $('Extract IOCs').item.json.sha256 }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": false,
+        "options": {},
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -96,
+        656
+      ],
+      "id": "4a697c85-3d97-44ff-a1fd-2981b1b27ad4",
+      "name": "VirusTotal 4",
+      "extendsCredential": "virusTotalApi",
+      "credentials": {
+        "virusTotalApi": {
+          "id": "jSH8Ybx7huB45Crk",
+          "name": "Account 4"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "-4216466664",
+        "text": "= {{ $('Extract IOCs').item.json.full_alert.rule.description }} on {{ $('Extract IOCs').item.json.agent }} - {{ $('Extract IOCs').item.json.full_alert.agent.ip }}\n\nThis file detected on Virustotal with detail\n  - Hash: {{ $json.summary.SHA256 }}\n  - Description: {{ $json.summary.Magic }}\n  - Location: {{ $('Extract IOCs').item.json.full_alert.syscheck.path }}\n  - Known as: {{ $json.summary.Name }}\n",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        448,
+        16
+      ],
+      "id": "0599679c-0300-4c7e-8056-ddd7006b7e4d",
+      "name": "Send Alert",
+      "webhookId": "e8c63a9c-77d2-431b-8b60-bbb83fe874bb",
+      "credentials": {
+        "telegramApi": {
+          "id": "qS11jT6lV1rcdOZr",
+          "name": "Aino_Security_Monitoring"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dceb2d4c-1540-4da0-813f-619c3a16a572",
+              "leftValue": "={{ $json.error.message }}",
+              "rightValue": "The service is receiving too many requests from you",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        128
+      ],
+      "id": "f8ca3db1-d2da-49ef-a7fa-b689861060fe",
+      "name": "429 - 1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dceb2d4c-1540-4da0-813f-619c3a16a572",
+              "leftValue": "={{ $json.error.message }}",
+              "rightValue": "The service is receiving too many requests from you",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        304
+      ],
+      "id": "e9590add-0e3b-4895-ae65-b2ff6473c089",
+      "name": "429 - 2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dceb2d4c-1540-4da0-813f-619c3a16a572",
+              "leftValue": "={{ $json.error.message }}",
+              "rightValue": "The service is receiving too many requests from you",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        480
+      ],
+      "id": "ec6041db-41f0-4f63-855b-00109f01350b",
+      "name": "429 - 3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dceb2d4c-1540-4da0-813f-619c3a16a572",
+              "leftValue": "={{ $json.error.message }}",
+              "rightValue": "The service is receiving too many requests from you",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        656
+      ],
+      "id": "c37b643c-0f00-4de9-831e-d7ba6da88e88",
+      "name": "429 - 4"
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "malware_virustotal_prod",
+          "mode": "list",
+          "cachedResultName": "malware_virustotal_prod"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $json.date }}",
+            "agent": "={{ $json.agent }}",
+            "location": "={{ $json.location }}",
+            "note": "={{ $json.note }}",
+            "result": "={{ $json.result }}",
+            "hash": "={{ $json.hash }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent",
+              "displayName": "agent",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hash",
+              "displayName": "hash",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "result",
+              "displayName": "result",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1488,
+        256
+      ],
+      "id": "c19355b6-54b7-4c01-9916-1e712d45bdab",
+      "name": "Insert in Prod",
+      "credentials": {
+        "postgres": {
+          "id": "t5TqpQLDRgLiK8Es",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "malware_virustotal_stg",
+          "mode": "list",
+          "cachedResultName": "malware_virustotal_stg"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $json.date }}",
+            "agent": "={{ $json.agent }}",
+            "location": "={{ $json.location }}",
+            "note": "={{ $json.note }}",
+            "result": "={{ $json.result }}",
+            "hash": "={{ $json.hash }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent",
+              "displayName": "agent",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hash",
+              "displayName": "hash",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "result",
+              "displayName": "result",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1488,
+        384
+      ],
+      "id": "5331b62e-9993-431a-979a-bdfb9cd818b1",
+      "name": "Insert in Staging",
+      "credentials": {
+        "postgres": {
+          "id": "t5TqpQLDRgLiK8Es",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "malware_virustotal_dev",
+          "mode": "list",
+          "cachedResultName": "malware_virustotal_dev"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "date": "={{ $json.date }}",
+            "agent": "={{ $json.agent }}",
+            "location": "={{ $json.location }}",
+            "note": "={{ $json.note }}",
+            "result": "={{ $json.result }}",
+            "hash": "={{ $json.hash }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "date",
+              "displayName": "date",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "agent",
+              "displayName": "agent",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "hash",
+              "displayName": "hash",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "result",
+              "displayName": "result",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1488,
+        512
+      ],
+      "id": "b7ce258a-1787-40da-ad4a-7e760e24a614",
+      "name": "Insert in Dev",
+      "credentials": {
+        "postgres": {
+          "id": "t5TqpQLDRgLiK8Es",
+          "name": "Postgres"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "schema": {
+          "__rl": true,
+          "mode": "list",
+          "value": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "virustotal_hash",
+          "mode": "list",
+          "cachedResultName": "virustotal_hash"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "hash": "={{ $json.hash }}",
+            "status": "={{ $json.result }}",
+            "note": "={{ $json.note }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "hash",
+              "displayName": "hash",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": true,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "note",
+              "displayName": "note",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "first_seen",
+              "displayName": "first_seen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_seen",
+              "displayName": "last_seen",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1216,
+        0
+      ],
+      "id": "1b6d553e-43b3-475e-8f06-cecb94bda307",
+      "name": "Insert list hash",
+      "credentials": {
+        "postgres": {
+          "id": "t5TqpQLDRgLiK8Es",
+          "name": "Postgres"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Execute a SQL query": {
+      "main": [
+        []
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract IOCs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract IOCs": {
+      "main": [
+        [
+          {
+            "node": "Check Hash in List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Susspicious",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Susspicious": {
+      "main": [
+        [
+          {
+            "node": "Send Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Not found in VT": {
+      "main": [
+        [
+          {
+            "node": "Switch1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch1": {
+      "main": [
+        [
+          {
+            "node": "Insert in Prod",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert in Staging",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Insert in Dev",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Found": {
+      "main": [
+        [
+          {
+            "node": "Switch1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Insert list hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Found1": {
+      "main": [
+        [
+          {
+            "node": "Switch1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Hash in List": {
+      "main": [
+        [
+          {
+            "node": "Exist?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suspicious?": {
+      "main": [
+        [
+          {
+            "node": "Send Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Exist?": {
+      "main": [
+        [
+          {
+            "node": "Suspicious?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Found1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "VirusTotal 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal 1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "429 - 1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal 2": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "429 - 2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal 3": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "429 - 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal 4": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "429 - 4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Alert": {
+      "main": [
+        []
+      ]
+    },
+    "429 - 1": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal 2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not found in VT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "429 - 2": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal 3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not found in VT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "429 - 3": {
+      "main": [
+        [
+          {
+            "node": "VirusTotal 4",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not found in VT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "429 - 4": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Not found in VT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert in Prod": {
+      "main": [
+        []
+      ]
+    },
+    "Insert in Staging": {
+      "main": [
+        []
+      ]
+    },
+    "Insert in Dev": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7404e458-4b99-4961-9b6e-1f11d22ee92c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "44082b38638ad2a15c599391fd523561acbf2348c862280d43b520975f3adb88"
+  },
+  "id": "hy6OSewrqMAujyNN",
+  "tags": []
+}

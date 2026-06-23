@@ -1,0 +1,1572 @@
+{
+  "name": "Wazuh to Mikrotik",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "network-attack",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -96,
+        -240
+      ],
+      "id": "5f859bb7-7324-4608-bd29-52b33fdb7a7c",
+      "name": "Webhook",
+      "webhookId": "10e7fa9a-e0e3-4373-b24f-01e549feb6d1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Ambil full_log dari BODY webhook\nconst fullLog = $json.body.full_log;\n\n// Safety check\nif (!fullLog) {\n  return {\n    error: \"full_log tidak ditemukan\",\n    debug: $json.body\n  };\n}\n\n// Regex IPv4 + IPv4-mapped IPv6\nconst ipRegex = /(::ffff:)?(\\d{1,3}(?:\\.\\d{1,3}){3})/;\nconst match = fullLog.match(ipRegex);\n\n// Output sesuai yang kamu minta\nreturn {\n  ip_address: match ? match[2] : null\n};\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        -112
+      ],
+      "id": "56c1cef3-c59d-4300-a884-5679e6837ba1",
+      "name": "Code",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "preBuiltAgentsCalloutHttpRequest": "",
+        "httpVariantWarning": "",
+        "curlImport": "",
+        "method": "GET",
+        "": "",
+        "url": "=https://www.virustotal.com/api/v3/ip_addresses/{{ $json.ip_address }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": false,
+        "options": {},
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        944,
+        0
+      ],
+      "id": "1f07af4a-b0c5-4cca-a926-d664ffc4ee1a",
+      "name": "VirusTotal HTTP Request",
+      "extendsCredential": "virusTotalApi",
+      "credentials": {
+        "virusTotalApi": {
+          "id": "xKTwHZoWeSgPZef2",
+          "name": "test"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "11b8bcc2-6678-432e-8969-38039de099f1",
+              "leftValue": "={{ $json.data.attributes.reputation }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "lt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1152,
+        -144
+      ],
+      "id": "32482d56-3c99-4454-9e2e-0f11b211079d",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ab701b3c-a162-4e84-83c0-5f472ed984ea",
+              "leftValue": "={{ $json.body.data.srcip }}",
+              "rightValue": "Possible buffer overflow attempt.",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        416,
+        -240
+      ],
+      "id": "c54b62f7-5ab7-4fe0-b7ae-01ad37f5d0df",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "preBuiltAgentsCalloutHttpRequest": "",
+        "httpVariantWarning": "",
+        "curlImport": "",
+        "method": "GET",
+        "": "",
+        "url": "=https://www.virustotal.com/api/v3/ip_addresses/{{ $json.body.data.srcip }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "virusTotalApi",
+        "provideSslCertificates": false,
+        "sendQuery": false,
+        "sendHeaders": false,
+        "sendBody": false,
+        "options": {},
+        "infoMessage": ""
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        864,
+        -688
+      ],
+      "id": "265f7a40-3822-4a13-980d-f67b14703fac",
+      "name": "VirusTotal HTTP Request1",
+      "extendsCredential": "virusTotalApi",
+      "credentials": {
+        "virusTotalApi": {
+          "id": "xKTwHZoWeSgPZef2",
+          "name": "test"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "sshpass -p \"PomPuxAzpRduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.146 -p22002 \"/delay 5m\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2208,
+        -256
+      ],
+      "id": "0667cda9-16f4-4774-ba32-7d43c436c85f",
+      "name": "delay"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"PomPuxAzpRduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.146 -p22002 \"/ip firewall address-list disable [find list=BLOCKED_IP_n8n address={{ $('Code').item.json.ip_address }}]\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2416,
+        -256
+      ],
+      "id": "8f52e85d-531a-44c4-ae8a-543e36d4e6e3",
+      "name": "remove block"
+    },
+    {
+      "parameters": {
+        "command": "sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/delay 5m\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2128,
+        496
+      ],
+      "id": "66106d94-891e-4694-99de-1385c702632f",
+      "name": "delay1"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/ip firewall address-list disable [find list=BLOCKED_IP_n8n address={{ $('Code').item.json.ip_address }}]\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2336,
+        496
+      ],
+      "id": "35fdb0b1-5587-468f-b216-d834178fcccc",
+      "name": "remove block1"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('If1').item.json.body.agent.name }}",
+                    "rightValue": "prod-",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "bb0c1bfb-37ba-465f-9287-73e8452cc625"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Prod"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "adc11bb2-a1d1-4a53-8084-f7c8b8389aa2",
+                    "leftValue": "={{ $('If1').item.json.body.agent.name }}",
+                    "rightValue": "prod-",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notContains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Non-prod"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1360,
+        -928
+      ],
+      "id": "66cabe27-ea02-41ea-a97d-9838c086f70c",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('If1').item.json.body.agent.name }}",
+                    "rightValue": "prod-",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "bb0c1bfb-37ba-465f-9287-73e8452cc625"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Prod"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "f12f2475-f8e8-4684-b7fc-a23629b7d1be",
+                    "leftValue": "={{ $('If1').item.json.body.agent.name }}",
+                    "rightValue": "prod-",
+                    "operator": {
+                      "type": "string",
+                      "operation": "notContains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Non-prod"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        1408,
+        0
+      ],
+      "id": "ae75bf25-fc23-4a74-ae2b-dd3fd2b83fcf",
+      "name": "Switch1"
+    },
+    {
+      "parameters": {
+        "command": "sshpass -p \"RduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.147 -p22002 \"/delay 5m\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        -1216
+      ],
+      "id": "977d7c3e-055b-4199-88cf-017327a02b85",
+      "name": "delay2"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"RduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.147 -p22002 \"/ip firewall address-list disable [find list=BLOCKED_IP_n8n address={{ $('Webhook').item.json.body.data.srcip }}]\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        -1216
+      ],
+      "id": "191d6644-f3c7-4a44-b2f8-5bfb59fdc06e",
+      "name": "remove block2"
+    },
+    {
+      "parameters": {
+        "command": "sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/delay 5m\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2048,
+        -656
+      ],
+      "id": "414ed1bb-8b59-4e73-ac5f-89c2ced31e3e",
+      "name": "delay3"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/ip firewall address-list disable [find list=BLOCKED_IP_n8n address={{ $('Webhook').item.json.body.data.srcip }}]\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2256,
+        -656
+      ],
+      "id": "35a9de4d-b601-4211-a032-30af89f22bac",
+      "name": "remove block3"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Webhook').item.json.body.data.srcip }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        -656
+      ],
+      "id": "5d81d658-253f-475a-b5aa-1073df9acb40",
+      "name": "add block3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "da4c25a1-e817-4a52-b4ef-abaff9c930d3",
+              "leftValue": "={{ $json.data.attributes.country }}",
+              "rightValue": "ID",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1648,
+        576
+      ],
+      "id": "37a6fd3b-ce42-4dc3-8bcd-8cbe15ddada8",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f55fe682-75c7-4467-8fb6-e60ad67562c5",
+              "leftValue": "={{ $json.data.attributes.country }}",
+              "rightValue": "ID",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        -512
+      ],
+      "id": "ceaf6b01-72dd-4907-9401-bd716e8b28c3",
+      "name": "If3"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Webhook').item.json.body.data.srcip }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1840,
+        -496
+      ],
+      "id": "1b5c069a-ca5f-4111-8ec7-d64d893394ca",
+      "name": "add block5"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f3daa9bf-fbbf-4322-8074-6c028d38c937",
+              "leftValue": "={{ $json.body.rule.level }}",
+              "rightValue": 11,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        112,
+        -240
+      ],
+      "id": "0d9de9e0-2e7c-44fe-be80-9c346caa9823",
+      "name": "If4"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address=157.10.252.56\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        992,
+        -288
+      ],
+      "id": "2d216fb5-2914-4eb9-8d3c-9267ca17fea3",
+      "name": "add block6"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Code').item.json.ip_address }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        496
+      ],
+      "id": "0a6911fb-07ff-4b3d-9db9-7fec888daa1e",
+      "name": "add block - ITS"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Code').item.json.ip_address }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1920,
+        672
+      ],
+      "id": "e04de8bf-3c4e-43ba-a9aa-26e4e7e9cda5",
+      "name": "add block1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f55fe682-75c7-4467-8fb6-e60ad67562c5",
+              "leftValue": "={{ $json.data.attributes.country }}",
+              "rightValue": "ID",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1536,
+        -1072
+      ],
+      "id": "16d588d6-3cb5-4d4f-88bf-64a70ca64cb8",
+      "name": "If5"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"PomPuxAzpRduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.146 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Webhook').item.json.body.data.srcip }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        -1056
+      ],
+      "id": "7bd18d69-3390-4ed6-a80c-98d105ec31ab",
+      "name": "add block"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f55fe682-75c7-4467-8fb6-e60ad67562c5",
+              "leftValue": "={{ $json.data.attributes.country }}",
+              "rightValue": "ID",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1632,
+        -128
+      ],
+      "id": "adf2c74e-de64-4596-bb98-ffd55e16617d",
+      "name": "If7"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"PomPuxAzpRduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.146 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Code').item.json.ip_address }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        48
+      ],
+      "id": "b55c6845-5cff-4e10-8975-8e8eddf7e304",
+      "name": "add block2"
+    },
+    {
+      "parameters": {
+        "chatId": "-4216466664",
+        "text": "=IP address {{ $('Code').item.json.ip_address }} has added to blocked list on lprod router",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2208,
+        48
+      ],
+      "id": "ff2db307-0095-4919-82ad-34e03c00f56f",
+      "name": "Send a text message",
+      "webhookId": "150d33e9-eee1-4fbd-9ddb-50792ee2b3d9",
+      "credentials": {
+        "telegramApi": {
+          "id": "qS11jT6lV1rcdOZr",
+          "name": "Aino_Security_Monitoring"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "-4216466664",
+        "text": "=IP address {{ $('Code').item.json.ip_address }} has added to blocked list on ITsupport router",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2128,
+        672
+      ],
+      "id": "36806b28-52c6-4f1a-b19e-90fd0d8c2eb8",
+      "name": "Send a text message1",
+      "webhookId": "86b4b8a4-507e-46b9-af55-e4f154ff89a9",
+      "credentials": {
+        "telegramApi": {
+          "id": "qS11jT6lV1rcdOZr",
+          "name": "Aino_Security_Monitoring"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "-4216466664",
+        "text": "=IP address {{ $('Webhook').item.json.body.data.srcip }} has added to blocked list on ITsupport router",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2048,
+        -496
+      ],
+      "id": "61c33323-bcac-47a0-a4ef-b5c8989dcb21",
+      "name": "Send a text message2",
+      "webhookId": "150d33e9-eee1-4fbd-9ddb-50792ee2b3d9",
+      "credentials": {
+        "telegramApi": {
+          "id": "qS11jT6lV1rcdOZr",
+          "name": "Aino_Security_Monitoring"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "-4216466664",
+        "text": "=IP address {{ $('Webhook').item.json.body.data.srcip }} has added to blocked list on lprod router",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2016,
+        -1056
+      ],
+      "id": "235c11f9-d4d0-4428-ab3b-7e7b1fac9945",
+      "name": "Send a text message3",
+      "webhookId": "150d33e9-eee1-4fbd-9ddb-50792ee2b3d9",
+      "credentials": {
+        "telegramApi": {
+          "id": "qS11jT6lV1rcdOZr",
+          "name": "Aino_Security_Monitoring"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "sshpass -p \"PomPuxAzpRduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.146 -p22002 \"/delay 5m\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        -1376
+      ],
+      "id": "468274c5-dde7-45b4-872e-72530782c561",
+      "name": "delay4"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"PomPuxAzpRduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.146 -p22002 \"/ip firewall address-list disable [find list=BLOCKED_IP_n8n address={{ $('Webhook').item.json.body.data.srcip }}]\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2224,
+        -1376
+      ],
+      "id": "1f4ab9ea-bf81-4546-9819-b1dd0f167e46",
+      "name": "remove block4"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"RduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.147 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Webhook').item.json.body.data.srcip }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        -896
+      ],
+      "id": "d036689a-a1c8-4e2c-bcde-80313a669cc5",
+      "name": "add block4"
+    },
+    {
+      "parameters": {
+        "chatId": "-4216466664",
+        "text": "=IP address {{ $('Webhook').item.json.body.data.srcip }} has added to blocked list on tpord router",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2016,
+        -896
+      ],
+      "id": "cf264c31-17b8-47b3-930f-611d636fd028",
+      "name": "Send a text message4",
+      "webhookId": "150d33e9-eee1-4fbd-9ddb-50792ee2b3d9",
+      "credentials": {
+        "telegramApi": {
+          "id": "qS11jT6lV1rcdOZr",
+          "name": "Aino_Security_Monitoring"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"PomPuxAzpRduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.146 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Webhook').item.json.body.data.srcip }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        -1376
+      ],
+      "id": "aa43be3e-a8a4-4524-8b4e-ce8534dc8332",
+      "name": "add block - lprod"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"RduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.147 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Webhook').item.json.body.data.srcip }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        -1216
+      ],
+      "id": "c0e2c00c-d07d-4bde-b7f9-670cba9f9f14",
+      "name": "add block - tprod"
+    },
+    {
+      "parameters": {
+        "command": "sshpass -p \"RduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.147 -p22002 \"/delay 5m\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2208,
+        -112
+      ],
+      "id": "b480e9ac-b5c9-4877-a368-4ba841c239d6",
+      "name": "delay5"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"RduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.147 -p22002 \"/ip firewall address-list disable [find list=BLOCKED_IP_n8n address={{ $('Code').item.json.ip_address }}]\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2416,
+        -112
+      ],
+      "id": "0289acd0-1443-44d3-9537-cd7c7aa1874b",
+      "name": "remove block5"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"RduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.147 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Code').item.json.ip_address }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        208
+      ],
+      "id": "0e0e1594-d737-418e-8277-c82d0b091c8f",
+      "name": "add block7"
+    },
+    {
+      "parameters": {
+        "chatId": "-4216466664",
+        "text": "=IP address {{ $('Code').item.json.ip_address }} has added to blocked list on tprod router",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        2208,
+        208
+      ],
+      "id": "6ef36fef-c816-4402-aa07-7b395dbfbca6",
+      "name": "Send a text message5",
+      "webhookId": "150d33e9-eee1-4fbd-9ddb-50792ee2b3d9",
+      "credentials": {
+        "telegramApi": {
+          "id": "qS11jT6lV1rcdOZr",
+          "name": "Aino_Security_Monitoring"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"PomPuxAzpRduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.146 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Code').item.json.ip_address }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        -256
+      ],
+      "id": "b9a9aa97-d65b-41a8-9708-21e770252eb7",
+      "name": "add block - lpord"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"RduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.147 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address={{ $('Code').item.json.ip_address }}\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1888,
+        -112
+      ],
+      "id": "8f826419-73c4-4da1-be31-fabc0d55ce95",
+      "name": "add block - tpord"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "11b8bcc2-6678-432e-8969-38039de099f1",
+              "leftValue": "={{ $json.body.data.srcip }}",
+              "rightValue": "124.40.251.",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "e0fb9ac6-1fb7-4d96-87f5-a09ea04c95fa",
+              "leftValue": "={{ $json.body.data.srcip }}",
+              "rightValue": "182.253.190.",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        592,
+        -528
+      ],
+      "id": "f8d71d56-aec7-434d-87ac-2a1e42f70b1b",
+      "name": "whitelist ip Aino"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "11b8bcc2-6678-432e-8969-38039de099f1",
+              "leftValue": "={{ $json.ip_address }}",
+              "rightValue": "124.40.251.",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "e0fb9ac6-1fb7-4d96-87f5-a09ea04c95fa",
+              "leftValue": "={{ $json.ip_address }}",
+              "rightValue": "182.253.190.",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        784,
+        -112
+      ],
+      "id": "9f8ef015-47c0-4399-86e6-e1e0959542f9",
+      "name": "whitelist ip Aino1"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"RduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.147 -p22002 \"/ip firewall address-list print where list=BLOCKED_IP_n8n\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        3072,
+        -1088
+      ],
+      "id": "8c2baefc-49e8-45fd-a341-68e38fd1b4b9",
+      "name": "cek list tprod"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"PomPuxAzpRduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.146 -p22002 \"/ip firewall address-list print where list=BLOCKED_IP_n8n\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        3072,
+        -944
+      ],
+      "id": "b078597f-e31b-49d5-87f3-31cdef83dfde",
+      "name": "cek list lprod"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/ip firewall address-list print where list=BLOCKED_IP_n8n\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        3072,
+        -784
+      ],
+      "id": "a51645fd-ecec-4313-9e3e-e9d38411ea5f",
+      "name": "cek list itsupport"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"PomPuxAzpRduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.146 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address=x.x.x.x\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2768,
+        -1088
+      ],
+      "id": "85acccda-7189-4c18-9585-dabd24164a8c",
+      "name": "manual - lprod"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"RduA7Ssjy9C3ska9UrMLZDTUtYLetijkd\" ssh -o StrictHostKeyChecking=no n8n_wazuh@202.129.187.147 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address=x.x.x.x\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2768,
+        -928
+      ],
+      "id": "9f94428a-047e-4712-8193-e399902f69a0",
+      "name": "manual - tprod"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/ip firewall address-list add list=BLOCKED_IP_n8n address=5.189.160.230\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2768,
+        -768
+      ],
+      "id": "dd22ab18-a1c8-4b04-a6ed-65572096bd57",
+      "name": "add block8"
+    },
+    {
+      "parameters": {
+        "command": "=sshpass -p \"sGNKsLbggNmofaW0\" ssh -o StrictHostKeyChecking=no bot-blocked@10.13.0.1 -p22002 \"/ip firewall address-list remove [find list=BLOCKED_IP_n8n address=10.13.0.3]\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        2944,
+        -560
+      ],
+      "id": "4386d0db-f438-47a5-a3dd-7d1027f40a6a",
+      "name": "remove block6"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "If4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "whitelist ip Aino1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Switch1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [],
+        []
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "whitelist ip Aino",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "VirusTotal HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "delay": {
+      "main": [
+        [
+          {
+            "node": "remove block",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "delay1": {
+      "main": [
+        [
+          {
+            "node": "remove block1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch1": {
+      "main": [
+        [
+          {
+            "node": "If7",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "delay2": {
+      "main": [
+        [
+          {
+            "node": "remove block2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "delay3": {
+      "main": [
+        [
+          {
+            "node": "remove block3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block3": {
+      "main": [
+        [
+          {
+            "node": "delay3",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a text message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "If5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "add block - ITS",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "add block1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If3": {
+      "main": [
+        [
+          {
+            "node": "add block3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "add block5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If4": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block - ITS": {
+      "main": [
+        [
+          {
+            "node": "delay1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block1": {
+      "main": [
+        [
+          {
+            "node": "Send a text message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If5": {
+      "main": [
+        [
+          {
+            "node": "add block - tprod",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "add block - lprod",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "add block",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "add block4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If7": {
+      "main": [
+        [
+          {
+            "node": "add block - lpord",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "add block - tpord",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "add block2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "add block7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block2": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block": {
+      "main": [
+        [
+          {
+            "node": "Send a text message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block5": {
+      "main": [
+        [
+          {
+            "node": "Send a text message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "delay4": {
+      "main": [
+        [
+          {
+            "node": "remove block4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block4": {
+      "main": [
+        [
+          {
+            "node": "Send a text message4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block - lprod": {
+      "main": [
+        [
+          {
+            "node": "delay4",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a text message3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block - tprod": {
+      "main": [
+        [
+          {
+            "node": "delay2",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a text message4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "delay5": {
+      "main": [
+        [
+          {
+            "node": "remove block5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block7": {
+      "main": [
+        [
+          {
+            "node": "Send a text message5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block - lpord": {
+      "main": [
+        [
+          {
+            "node": "delay",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "add block - tpord": {
+      "main": [
+        [
+          {
+            "node": "delay5",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send a text message5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "whitelist ip Aino": {
+      "main": [
+        [],
+        [
+          {
+            "node": "VirusTotal HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "whitelist ip Aino1": {
+      "main": [
+        [],
+        [
+          {
+            "node": "VirusTotal HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7cf746ac-cf46-4e9b-a775-66b4dd57cc4d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "44082b38638ad2a15c599391fd523561acbf2348c862280d43b520975f3adb88"
+  },
+  "id": "jzbiwe1MSJd1BmtY",
+  "tags": []
+}
